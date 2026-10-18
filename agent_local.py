@@ -1,11 +1,15 @@
 from ollama import chat
-from main import Beam, analyze
+from main import Beam, Column, Slab, analyze, save_json
 
 MODEL = "llama3.1:8b"
 elements = []
 
+SYSTEM_PROMPT = ("You are a civil engineering assistant. Use the tools to add beams, "
+                 "columns and slabs, list and analyze them, and save the project. "
+                 "Never calculate numbers yourself.")
 
-# ---------- Tools: normal functions the model may ask for ----------
+
+# ================= PART 1: TOOLS (normal functions the model may ask for) =================
 def add_beam(name: str, length: float, width: float, depth: float, load: float) -> str:
     """
     Add a concrete beam to the project.
@@ -21,6 +25,43 @@ def add_beam(name: str, length: float, width: float, depth: float, load: float) 
     return f"Beam {name} added. Total elements: {len(elements)}"
 
 
+def add_column(name: str, length: float, width: float, height: float) -> str:
+    """
+    Add a concrete column to the project.
+
+    Args:
+        name: Column name, for example C1
+        length: Section length in meters
+        width: Section width in meters
+        height: Column height in meters
+    """
+    elements.append(Column(name, float(length), float(width), float(height)))
+    return f"Column {name} added. Total elements: {len(elements)}"
+
+
+def add_slab(name: str, length: float, width: float, thickness: float) -> str:
+    """
+    Add a concrete slab to the project.
+
+    Args:
+        name: Slab name, for example S1
+        length: Slab length in meters
+        width: Slab width in meters
+        thickness: Slab thickness in meters
+    """
+    elements.append(Slab(name, float(length), float(width), float(thickness)))
+    return f"Slab {name} added. Total elements: {len(elements)}"
+
+
+def list_elements() -> str:
+    """
+    List all elements added so far, with volume and weight.
+    """
+    if len(elements) == 0:
+        return "No elements added yet."
+    return "\n".join(e.describe() for e in elements)
+
+
 def analyze_project() -> str:
     """
     Calculate total volume, total weight, maximum bending moment and
@@ -29,18 +70,27 @@ def analyze_project() -> str:
     return "\n".join(analyze(elements))
 
 
-TOOLS = {"add_beam": add_beam, "analyze_project": analyze_project}
+def save_project() -> str:
+    """
+    Save all elements to the file elements.json.
+    """
+    save_json(elements)
+    return f"Saved {len(elements)} element(s) to elements.json"
 
 
-# ---------- The agent loop ----------
-def run_agent(user_text, max_steps=6):
-    messages = [
-        {"role": "system",
-         "content": "You are a civil engineering assistant. Use the tools to add "
-                    "beams and analyze them. Never calculate numbers yourself."},
-        {"role": "user", "content": user_text},
-    ]
+# ================= PART 2: THE TOOL LIST (name -> function) =================
+TOOLS = {
+    "add_beam": add_beam,
+    "add_column": add_column,
+    "add_slab": add_slab,
+    "list_elements": list_elements,
+    "analyze_project": analyze_project,
+    "save_project": save_project,
+}
 
+
+# ================= PART 3: THE AGENT LOOP =================
+def run_agent(messages, max_steps=6):
     for step in range(max_steps):
         response = chat(MODEL, messages=messages, tools=list(TOOLS.values()))
         messages.append(response.message)
@@ -68,7 +118,15 @@ def run_agent(user_text, max_steps=6):
     return "Stopped: too many steps."
 
 
+# ================= PART 4: THE CHAT (this part runs when you start the file) =================
 if __name__ == "__main__":
-    request = input("What should the agent do? ")
-    print("\nFinal answer:")
-    print(run_agent(request))
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    print("Type your request. Type quit to stop.")
+    while True:
+        request = input("\nYou: ").strip()
+        if request.lower() == "quit":
+            break
+        if request == "":
+            continue
+        messages.append({"role": "user", "content": request})
+        print("Agent:", run_agent(messages))
