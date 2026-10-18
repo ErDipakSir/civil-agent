@@ -1,13 +1,22 @@
 from ollama import chat
-from main import Beam, Column, Slab, analyze, save_json
+from main import Beam, Column, Slab, analyze, save_json, load_json
 
 MODEL = "llama3.1:8b"
-elements = []
+elements = load_json()        # the agent starts with the saved project
 
 SYSTEM_PROMPT = ("You are a civil engineering assistant. Use the tools to add beams, "
                  "columns and slabs, list and analyze them, and save the project. "
                  "Never calculate numbers yourself.")
 
+def check_positive(**values):
+    for label, value in values.items():
+        if float(value) <= 0:
+            raise ValueError(f"{label} must be greater than zero")
+
+
+def check_new_name(name):
+    if any(e.name == name for e in elements):
+        raise ValueError(f"An element named {name} already exists. Use a different name.")
 
 # ================= PART 1: TOOLS (normal functions the model may ask for) =================
 def add_beam(name: str, length: float, width: float, depth: float, load: float) -> str:
@@ -21,6 +30,8 @@ def add_beam(name: str, length: float, width: float, depth: float, load: float) 
         depth: Beam depth in meters
         load: Uniform load in kN per meter
     """
+    check_new_name(name)
+    check_positive(length=length, width=width, depth=depth, load=load)
     elements.append(Beam(name, float(length), float(width), float(depth), float(load)))
     return f"Beam {name} added. Total elements: {len(elements)}"
 
@@ -35,6 +46,8 @@ def add_column(name: str, length: float, width: float, height: float) -> str:
         width: Section width in meters
         height: Column height in meters
     """
+    check_new_name(name)
+    check_positive(length=length, width=width, height=height)
     elements.append(Column(name, float(length), float(width), float(height)))
     return f"Column {name} added. Total elements: {len(elements)}"
 
@@ -49,9 +62,10 @@ def add_slab(name: str, length: float, width: float, thickness: float) -> str:
         width: Slab width in meters
         thickness: Slab thickness in meters
     """
+    check_new_name(name)
+    check_positive(length=length, width=width, thickness=thickness)
     elements.append(Slab(name, float(length), float(width), float(thickness)))
     return f"Slab {name} added. Total elements: {len(elements)}"
-
 
 def list_elements() -> str:
     """
